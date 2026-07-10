@@ -79,7 +79,9 @@ export function useJarvis() {
   }, [addMessage]);
 
   const sendText = useCallback((text: string) => {
-    wsRef.current?.send(JSON.stringify({ type: "user_text", text }));
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "user_text", text }));
+    }
   }, []);
 
   const connectIntegration = useCallback(async (name: string) => {
