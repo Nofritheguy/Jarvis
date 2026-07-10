@@ -14,6 +14,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = "claude-sonnet-4-6"
 
 # OpenWakeWord
+USE_WAKE_WORD = os.getenv("USE_WAKE_WORD", "false").lower() == "true"
 WAKEWORD_MODEL = os.getenv("WAKEWORD_MODEL", "hey_jarvis")
 WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.5"))
 

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from typing import Optional
 import numpy as np
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -53,7 +54,7 @@ def _sync_handle_audio(audio: np.ndarray):
     asyncio.run(handle_audio(audio))
 
 
-listener: Listener | None = None
+listener: Optional[Listener] = None
 
 
 @asynccontextmanager

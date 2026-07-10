@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from pathlib import Path
@@ -31,7 +32,7 @@ def get_db() -> Session:
         db.close()
 
 
-def save_message(role: str, content: str, tool_name: str | None = None) -> None:
+def save_message(role: str, content: str, tool_name: Optional[str] = None) -> None:
     with SessionLocal() as db:
         db.add(Message(role=role, content=content, tool_name=tool_name))
         db.commit()

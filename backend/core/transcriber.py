@@ -1,10 +1,11 @@
 import io
+from typing import Optional
 import numpy as np
 import whisper
 import soundfile as sf
 from backend.config import WHISPER_MODEL, SAMPLE_RATE
 
-_model: whisper.Whisper | None = None
+_model: Optional[whisper.Whisper] = None
 
 
 def _get_model() -> whisper.Whisper:

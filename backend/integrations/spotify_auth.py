@@ -1,5 +1,6 @@
 import os
 import json
+from typing import Optional
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from backend.config import (
@@ -13,7 +14,7 @@ SCOPE = (
     "user-read-playback-state user-modify-playback-state user-read-currently-playing"
 )
 
-_client: spotipy.Spotify | None = None
+_client: Optional[spotipy.Spotify] = None
 
 
 def get_spotify_client() -> spotipy.Spotify:
