@@ -6,22 +6,21 @@ import StatusBar from "@/components/StatusBar";
 import ConversationFeed from "@/components/ConversationFeed";
 import IntegrationPanel from "@/components/IntegrationPanel";
 import { useJarvis } from "./useJarvis";
+import clsx from "clsx";
 
 const NeuralOrb = dynamic(() => import("@/components/NeuralOrb"), { ssr: false });
 
 export default function Home() {
-  const { state, audioLevel, messages, integrations, sendText, connectIntegration, disconnectIntegration } = useJarvis();
+  const { state, audioLevel, messages, integrations, wsStatus, sendText, connectIntegration, disconnectIntegration } = useJarvis();
   const [input, setInput] = useState("");
   const [sessionStart, setSessionStart] = useState<Date | null>(null);
-
-  useEffect(() => {
-    setSessionStart(new Date());
-  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setSessionStart(new Date()); }, []);
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || wsStatus !== "connected") return;
     sendText(text);
     setInput("");
   };
@@ -32,7 +31,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-bg text-textMain overflow-hidden">
-      <StatusBar state={state} sessionStart={sessionStart} />
+      <StatusBar state={state} sessionStart={sessionStart} wsStatus={wsStatus} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left — Neural Orb */}
@@ -41,24 +40,17 @@ export default function Home() {
             <NeuralOrb state={state} audioLevel={audioLevel} mode="particle" />
           </div>
           <div className="mt-4 flex items-center gap-2">
-            <span
-              className={
-                state === "listening"
-                  ? "w-2 h-2 bg-green-400 rounded-full animate-pulse"
-                  : state === "thinking"
-                  ? "w-2 h-2 bg-purple-400 rounded-full animate-ping"
-                  : state === "speaking"
-                  ? "w-2 h-2 bg-secondary rounded-full animate-pulse"
-                  : "w-2 h-2 bg-secondary/40 rounded-full"
-              }
-            />
+            <span className={clsx(
+              "w-2 h-2 rounded-full",
+              state === "listening" ? "bg-green-400 animate-pulse"
+              : state === "thinking" ? "bg-purple-400 animate-ping"
+              : state === "speaking" ? "bg-secondary animate-pulse"
+              : "bg-secondary/40"
+            )} />
             <span className="font-mono text-xs text-textSub uppercase tracking-widest">
-              {state === "idle"
-                ? 'Powiedz "Jarvis"'
-                : state === "listening"
-                ? "Słucham..."
-                : state === "thinking"
-                ? "Przetwarzam..."
+              {state === "idle" ? 'Powiedz "Jarvis"'
+                : state === "listening" ? "Słucham..."
+                : state === "thinking" ? "Przetwarzam..."
                 : "Mówię..."}
             </span>
           </div>
@@ -70,19 +62,36 @@ export default function Home() {
             <ConversationFeed messages={messages} />
           </div>
 
-          {/* Text input */}
+          {wsStatus === "disconnected" && (
+            <p className="text-alert font-mono text-xs text-center">
+              Brak połączenia z backendem — upewnij się że backend działa na porcie 8000
+            </p>
+          )}
+
           <div className="flex gap-2">
             <input
               ref={inputRef}
-              className="flex-1 bg-textSub/10 border border-textSub/30 rounded-lg px-4 py-2 font-mono text-sm text-textMain placeholder-textSub/50 outline-none focus:border-secondary/50 transition-colors"
-              placeholder="Wpisz polecenie..."
+              disabled={wsStatus !== "connected"}
+              className={clsx(
+                "flex-1 border rounded-lg px-4 py-2 font-mono text-sm text-textMain placeholder-textSub/50 outline-none transition-colors",
+                wsStatus === "connected"
+                  ? "bg-textSub/10 border-textSub/30 focus:border-secondary/50"
+                  : "bg-textSub/5 border-textSub/20 opacity-50 cursor-not-allowed"
+              )}
+              placeholder={wsStatus === "connecting" ? "Łączenie z backendem..." : wsStatus === "disconnected" ? "Brak połączenia" : "Wpisz polecenie..."}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
             />
             <button
               onClick={handleSend}
-              className="px-4 py-2 bg-primary/20 border border-primary/40 hover:bg-primary/30 rounded-lg font-mono text-sm text-primary transition-colors"
+              disabled={wsStatus !== "connected"}
+              className={clsx(
+                "px-4 py-2 border rounded-lg font-mono text-sm transition-colors",
+                wsStatus === "connected"
+                  ? "bg-primary/20 border-primary/40 hover:bg-primary/30 text-primary"
+                  : "bg-textSub/10 border-textSub/20 text-textSub opacity-50 cursor-not-allowed"
+              )}
             >
               Wyślij
             </button>
@@ -90,7 +99,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Bottom — Integration panel */}
       <div className="px-6 pb-4">
         <IntegrationPanel
           integrations={integrations}

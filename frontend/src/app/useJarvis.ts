@@ -18,20 +18,32 @@ function makeId() {
   return Math.random().toString(36).slice(2);
 }
 
+export type WsStatus = "connecting" | "connected" | "disconnected";
+
 export function useJarvis() {
   const [state, setState] = useState<OrbState>("idle");
   const [audioLevel, setAudioLevel] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [integrations, setIntegrations] = useState<Integration[]>(DEFAULT_INTEGRATIONS);
+  const [wsStatus, setWsStatus] = useState<WsStatus>("connecting");
   const wsRef = useRef<WebSocket | null>(null);
 
   const addMessage = useCallback((msg: Omit<Message, "id" | "timestamp">) => {
     setMessages((prev) => [...prev, { ...msg, id: makeId(), timestamp: new Date() }]);
   }, []);
 
-  useEffect(() => {
+  const connect = useCallback(() => {
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
+    setWsStatus("connecting");
+
+    ws.onopen = () => setWsStatus("connected");
+    ws.onclose = () => {
+      setWsStatus("disconnected");
+      // reconnect after 3s
+      setTimeout(connect, 3000);
+    };
+    ws.onerror = () => setWsStatus("disconnected");
 
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
@@ -61,8 +73,10 @@ export function useJarvis() {
           break;
       }
     };
+  }, [addMessage]);
 
-    // Load integration statuses
+  useEffect(() => {
+    connect();
     fetch(`${API_URL}/integrations`)
       .then((r) => r.json())
       .then((list: { name: string; status: string }[]) => {
@@ -74,9 +88,8 @@ export function useJarvis() {
         );
       })
       .catch(() => {});
-
-    return () => ws.close();
-  }, [addMessage]);
+    return () => wsRef.current?.close();
+  }, [connect]);
 
   const sendText = useCallback((text: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -94,5 +107,5 @@ export function useJarvis() {
     setIntegrations((prev) => prev.map((i) => (i.name === name ? { ...i, status: "disconnected" } : i)));
   }, []);
 
-  return { state, audioLevel, messages, integrations, sendText, connectIntegration, disconnectIntegration };
+  return { state, audioLevel, messages, integrations, wsStatus, sendText, connectIntegration, disconnectIntegration };
 }

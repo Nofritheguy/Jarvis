@@ -6,6 +6,7 @@ import { OrbState } from "./NeuralOrb";
 interface StatusBarProps {
   state: OrbState;
   sessionStart: Date | null;
+  wsStatus: "connecting" | "connected" | "disconnected";
 }
 
 const STATE_LABELS: Record<OrbState, string> = {
@@ -22,7 +23,7 @@ const STATE_COLORS: Record<OrbState, string> = {
   speaking: "text-secondary",
 };
 
-export default function StatusBar({ state, sessionStart }: StatusBarProps) {
+export default function StatusBar({ state, sessionStart, wsStatus }: StatusBarProps) {
   const sessionTime = sessionStart
     ? sessionStart.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
     : "--:--";
@@ -34,13 +35,24 @@ export default function StatusBar({ state, sessionStart }: StatusBarProps) {
         <span className="text-textSub font-mono text-xs">v2.0</span>
       </div>
       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <span className={clsx("w-1.5 h-1.5 rounded-full", {
+            "bg-green-400": wsStatus === "connected",
+            "bg-yellow-400 animate-pulse": wsStatus === "connecting",
+            "bg-alert": wsStatus === "disconnected",
+          })} />
+          <span className={clsx("font-mono text-[10px]", {
+            "text-green-400": wsStatus === "connected",
+            "text-yellow-400": wsStatus === "connecting",
+            "text-alert": wsStatus === "disconnected",
+          })}>
+            {wsStatus === "connected" ? "WS" : wsStatus === "connecting" ? "WS..." : "WS OFF"}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
-          <span
-            className={clsx(
-              "w-2 h-2 rounded-full",
-              state === "idle" ? "bg-secondary" : "bg-green-400 animate-pulse"
-            )}
-          />
+          <span className={clsx("w-2 h-2 rounded-full",
+            state === "idle" ? "bg-secondary" : "bg-green-400 animate-pulse"
+          )} />
           <span className={clsx("font-mono text-xs font-semibold", STATE_COLORS[state])}>
             {STATE_LABELS[state]}
           </span>

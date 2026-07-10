@@ -13,13 +13,12 @@ from backend.core.brain import think
 from backend.core.speaker import speak
 from backend.core.memory import get_history
 
-# Integration status helpers
 import backend.integrations.google_auth as _gcal
 import backend.integrations.spotify_auth as _spotify
 import backend.integrations.messenger_session as _messenger
 
-# Active WebSocket connections
 _connections: set[WebSocket] = set()
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 async def broadcast(msg: dict):
@@ -32,9 +31,15 @@ async def broadcast(msg: dict):
     _connections.difference_update(dead)
 
 
+def broadcast_from_thread(msg: dict):
+    """Thread-safe broadcast — schedules on the main event loop."""
+    if _main_loop and not _main_loop.is_closed():
+        asyncio.run_coroutine_threadsafe(broadcast(msg), _main_loop)
+
+
 async def handle_audio(audio: np.ndarray):
     await broadcast({"type": "state_change", "state": "thinking"})
-    text = transcribe(audio)
+    text = await asyncio.get_event_loop().run_in_executor(None, transcribe, audio)
     await broadcast({"type": "transcript", "text": text})
 
     async def on_tool_call(name, args):
@@ -51,7 +56,8 @@ async def handle_audio(audio: np.ndarray):
 
 
 def _sync_handle_audio(audio: np.ndarray):
-    asyncio.run(handle_audio(audio))
+    if _main_loop and not _main_loop.is_closed():
+        asyncio.run_coroutine_threadsafe(handle_audio(audio), _main_loop)
 
 
 listener: Optional[Listener] = None
@@ -59,18 +65,13 @@ listener: Optional[Listener] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global listener
-
-    async def _on_state(state: str):
-        await broadcast({"type": "state_change", "state": state})
-
-    async def _on_level(level: float):
-        await broadcast({"type": "audio_level", "level": level})
+    global listener, _main_loop
+    _main_loop = asyncio.get_event_loop()
 
     listener = Listener(
         on_audio=_sync_handle_audio,
-        on_state=lambda s: asyncio.run(_on_state(s)),
-        on_audio_level=lambda l: asyncio.run(_on_level(l)),
+        on_state=lambda s: broadcast_from_thread({"type": "state_change", "state": s}),
+        on_audio_level=lambda l: broadcast_from_thread({"type": "audio_level", "level": l}),
     )
     listener.start()
     yield
@@ -102,13 +103,15 @@ async def history(limit: int = 50):
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     _connections.add(ws)
+    await ws.send_json({"type": "state_change", "state": "idle"})
     try:
         while True:
             data = await ws.receive_text()
             msg = json.loads(data)
-            # Support manual text input from UI
             if msg.get("type") == "user_text":
-                text = msg.get("text", "")
+                text = msg.get("text", "").strip()
+                if not text:
+                    continue
                 await broadcast({"type": "transcript", "text": text})
                 await broadcast({"type": "state_change", "state": "thinking"})
 
@@ -125,9 +128,12 @@ async def websocket_endpoint(ws: WebSocket):
                 await broadcast({"type": "state_change", "state": "idle"})
     except WebSocketDisconnect:
         _connections.discard(ws)
+    except Exception as e:
+        print(f"[WS ERROR] {e}")
+        _connections.discard(ws)
 
 
-# ─── Integration endpoints ────────────────────────────────────────────────────
+# ─── Integration endpoints ─────────────────────────────────────────────────────
 
 INTEGRATIONS = ["google_calendar", "spotify", "messenger"]
 
