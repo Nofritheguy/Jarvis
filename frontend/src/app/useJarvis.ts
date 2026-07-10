@@ -26,60 +26,68 @@ export function useJarvis() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [integrations, setIntegrations] = useState<Integration[]>(DEFAULT_INTEGRATIONS);
   const [wsStatus, setWsStatus] = useState<WsStatus>("connecting");
-  const wsRef = useRef<WebSocket | null>(null);
 
+  const wsRef = useRef<WebSocket | null>(null);
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+
+  // Stable setter — never changes reference
   const addMessage = useCallback((msg: Omit<Message, "id" | "timestamp">) => {
     setMessages((prev) => [...prev, { ...msg, id: makeId(), timestamp: new Date() }]);
   }, []);
 
-  const connect = useCallback(() => {
-    const ws = new WebSocket(WS_URL);
-    wsRef.current = ws;
-    setWsStatus("connecting");
-
-    ws.onopen = () => setWsStatus("connected");
-    ws.onclose = () => {
-      setWsStatus("disconnected");
-      // reconnect after 3s
-      setTimeout(connect, 3000);
-    };
-    ws.onerror = () => setWsStatus("disconnected");
-
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      switch (data.type) {
-        case "state_change":
-          setState(data.state as OrbState);
-          break;
-        case "audio_level":
-          setAudioLevel(data.level);
-          break;
-        case "transcript":
-          addMessage({ role: "user", text: data.text });
-          break;
-        case "tool_call":
-          addMessage({ role: "tool_call", text: JSON.stringify(data.args), toolName: data.tool });
-          break;
-        case "tool_result":
-          addMessage({ role: "tool_result", text: data.result, toolName: data.tool });
-          break;
-        case "response":
-          addMessage({ role: "assistant", text: data.text });
-          break;
-        case "integration_status":
-          setIntegrations((prev) =>
-            prev.map((i) => (i.name === data.name ? { ...i, status: data.status as IntegrationStatus } : i))
-          );
-          break;
-      }
-    };
-  }, [addMessage]);
-
   useEffect(() => {
-    connect();
+    mountedRef.current = true;
+
+    function openWs() {
+      if (!mountedRef.current) return;
+
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+      setWsStatus("connecting");
+
+      ws.onopen = () => {
+        if (!mountedRef.current) { ws.close(); return; }
+        setWsStatus("connected");
+        if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
+      };
+
+      ws.onclose = () => {
+        if (!mountedRef.current) return;
+        setWsStatus("disconnected");
+        retryRef.current = setTimeout(openWs, 3000);
+      };
+
+      ws.onerror = () => {
+        // onclose fires after onerror, handles retry
+      };
+
+      ws.onmessage = (e) => {
+        if (!mountedRef.current) return;
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(e.data); } catch { return; }
+        switch (data.type) {
+          case "state_change":   setState(data.state as OrbState); break;
+          case "audio_level":   setAudioLevel(data.level as number); break;
+          case "transcript":    addMessage({ role: "user", text: data.text as string }); break;
+          case "tool_call":     addMessage({ role: "tool_call", text: JSON.stringify(data.args), toolName: data.tool as string }); break;
+          case "tool_result":   addMessage({ role: "tool_result", text: data.result as string, toolName: data.tool as string }); break;
+          case "response":      addMessage({ role: "assistant", text: data.text as string }); break;
+          case "integration_status":
+            setIntegrations((prev) =>
+              prev.map((i) => i.name === data.name ? { ...i, status: data.status as IntegrationStatus } : i)
+            );
+            break;
+        }
+      };
+    }
+
+    openWs();
+
     fetch(`${API_URL}/integrations`)
       .then((r) => r.json())
       .then((list: { name: string; status: string }[]) => {
+        if (!mountedRef.current) return;
         setIntegrations((prev) =>
           prev.map((i) => {
             const found = list.find((x) => x.name === i.name);
@@ -88,8 +96,14 @@ export function useJarvis() {
         );
       })
       .catch(() => {});
-    return () => wsRef.current?.close();
-  }, [connect]);
+
+    return () => {
+      mountedRef.current = false;
+      if (retryRef.current) clearTimeout(retryRef.current);
+      wsRef.current?.close();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — runs once on mount
 
   const sendText = useCallback((text: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
