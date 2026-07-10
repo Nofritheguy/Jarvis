@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import StatusBar from "@/components/StatusBar";
 import ConversationFeed from "@/components/ConversationFeed";
@@ -9,11 +9,14 @@ import { useJarvis } from "./useJarvis";
 
 const NeuralOrb = dynamic(() => import("@/components/NeuralOrb"), { ssr: false });
 
-const SESSION_START = new Date();
-
 export default function Home() {
   const { state, audioLevel, messages, integrations, sendText, connectIntegration, disconnectIntegration } = useJarvis();
   const [input, setInput] = useState("");
+  const [sessionStart, setSessionStart] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setSessionStart(new Date());
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
@@ -29,7 +32,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-bg text-textMain overflow-hidden">
-      <StatusBar state={state} sessionStart={SESSION_START} />
+      <StatusBar state={state} sessionStart={sessionStart} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left — Neural Orb */}

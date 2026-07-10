@@ -5,7 +5,7 @@ import { OrbState } from "./NeuralOrb";
 
 interface StatusBarProps {
   state: OrbState;
-  sessionStart: Date;
+  sessionStart: Date | null;
 }
 
 const STATE_LABELS: Record<OrbState, string> = {
@@ -23,7 +23,9 @@ const STATE_COLORS: Record<OrbState, string> = {
 };
 
 export default function StatusBar({ state, sessionStart }: StatusBarProps) {
-  const sessionTime = sessionStart.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  const sessionTime = sessionStart
+    ? sessionStart.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
+    : "--:--";
 
   return (
     <div className="flex items-center justify-between px-6 py-3 border-b border-textSub/20">
