@@ -16,8 +16,6 @@
     "tailwindcss": "^3",
     "autoprefixer": "^10",
     "postcss": "^8",
-    "@react-three/fiber": "^8",
-    "@react-three/drei": "^9",
     "three": "^0.165",
     "@types/three": "^0.165",
     "clsx": "^2",
