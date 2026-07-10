@@ -13,9 +13,9 @@ TOKEN_DIR.mkdir(parents=True, exist_ok=True)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = "claude-sonnet-4-6"
 
-# Porcupine wake word
-PORCUPINE_ACCESS_KEY = os.getenv("PORCUPINE_ACCESS_KEY", "")
-PORCUPINE_KEYWORD_PATH = os.getenv("PORCUPINE_KEYWORD_PATH", "./jarvis_mac.ppn")
+# OpenWakeWord
+WAKEWORD_MODEL = os.getenv("WAKEWORD_MODEL", "hey_jarvis")
+WAKEWORD_THRESHOLD = float(os.getenv("WAKEWORD_THRESHOLD", "0.5"))
 
 # Audio
 SAMPLE_RATE = 16000
